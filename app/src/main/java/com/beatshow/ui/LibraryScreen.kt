@@ -66,12 +66,17 @@ fun LibraryScreen(
     message: String?,
     onMessageShown: () -> Unit,
     onImport: (List<android.net.Uri>) -> Unit,
+    onImportFolder: (android.net.Uri?) -> Unit,
     onDelete: (Collection<File>) -> Unit,
     onClearAll: () -> Unit,
     onPlay: () -> Unit,
     onSettings: () -> Unit,
 ) {
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia()) { onImport(it) }
+    // The system file browser offers "Select all" in its menu, which the photo picker lacks.
+    val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { onImport(it) }
+    val folderPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { onImportFolder(it) }
+    var addMenuOpen by remember { mutableStateOf(false) }
     var selecting by rememberSaveable { mutableStateOf(false) }
     var selected by remember { mutableStateOf(setOf<String>()) }
     var menuOpen by remember { mutableStateOf(false) }
@@ -141,16 +146,39 @@ fun LibraryScreen(
                     .padding(16.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                OutlinedButton(
-                    onClick = {
-                        picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-                    },
-                    enabled = importProgress == null,
-                    modifier = Modifier.weight(1f).height(56.dp),
-                ) {
-                    Icon(AppIcons.Add, null)
-                    Spacer(Modifier.width(8.dp))
-                    Text("Add photos")
+                Box(Modifier.weight(1f)) {
+                    OutlinedButton(
+                        onClick = { addMenuOpen = true },
+                        enabled = importProgress == null,
+                        modifier = Modifier.fillMaxWidth().height(56.dp),
+                    ) {
+                        Icon(AppIcons.Add, null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Add photos")
+                    }
+                    DropdownMenu(expanded = addMenuOpen, onDismissRequest = { addMenuOpen = false }) {
+                        DropdownMenuItem(
+                            text = { MenuText("From gallery", "Photo picker") },
+                            onClick = {
+                                addMenuOpen = false
+                                picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { MenuText("From files", "Use ⋮ → Select all to pick everything") },
+                            onClick = {
+                                addMenuOpen = false
+                                filePicker.launch(arrayOf("image/*"))
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { MenuText("Whole folder", "Imports every photo in a folder, e.g. DCIM/Camera") },
+                            onClick = {
+                                addMenuOpen = false
+                                folderPicker.launch(null)
+                            },
+                        )
+                    }
                 }
                 Button(
                     onClick = onPlay,
@@ -168,14 +196,18 @@ fun LibraryScreen(
             if (importProgress != null) {
                 val (done, total) = importProgress
                 Text(
-                    "Importing $done of $total…",
+                    if (total == 0) "Finding photos…" else "Importing $done of $total…",
                     style = MaterialTheme.typography.bodyMedium,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                 )
-                LinearProgressIndicator(
-                    progress = { if (total == 0) 0f else done.toFloat() / total },
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                )
+                if (total == 0) {
+                    LinearProgressIndicator(Modifier.fillMaxWidth().padding(horizontal = 16.dp))
+                } else {
+                    LinearProgressIndicator(
+                        progress = { done.toFloat() / total },
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                    )
+                }
             }
             if (photos.isEmpty()) {
                 Box(Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
@@ -250,5 +282,13 @@ fun LibraryScreen(
             },
             dismissButton = { TextButton(onClick = { confirmClear = false }) { Text("Cancel") } },
         )
+    }
+}
+
+@Composable
+private fun MenuText(title: String, subtitle: String) {
+    Column {
+        Text(title)
+        Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }

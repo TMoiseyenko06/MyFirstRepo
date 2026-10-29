@@ -31,6 +31,7 @@ class MainActivity : ComponentActivity() {
                         message = vm.message,
                         onMessageShown = vm::messageShown,
                         onImport = vm::importPhotos,
+                        onImportFolder = vm::importFolder,
                         onDelete = vm::deletePhotos,
                         onClearAll = vm::clearPhotos,
                         onPlay = vm::startShow,

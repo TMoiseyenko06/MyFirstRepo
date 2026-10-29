@@ -6,6 +6,7 @@ import android.graphics.BitmapFactory
 import android.graphics.Matrix
 import android.media.ExifInterface
 import android.net.Uri
+import android.provider.DocumentsContract
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -34,6 +35,28 @@ class PhotoRepository(private val context: Context) {
         }
         _photos.value = scan()
         failed
+    }
+
+    /** Every image document under the folder the user picked, including subfolders. */
+    suspend fun listImagesInFolder(treeUri: Uri): List<Uri> = withContext(Dispatchers.IO) {
+        val result = ArrayList<Uri>()
+        val pending = ArrayDeque<String>()
+        pending.add(DocumentsContract.getTreeDocumentId(treeUri))
+        val columns = arrayOf(DocumentsContract.Document.COLUMN_DOCUMENT_ID, DocumentsContract.Document.COLUMN_MIME_TYPE)
+        while (pending.isNotEmpty()) {
+            val children = DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, pending.removeFirst())
+            context.contentResolver.query(children, columns, null, null, null)?.use { c ->
+                while (c.moveToNext()) {
+                    val id = c.getString(0)
+                    val mime = c.getString(1) ?: continue
+                    when {
+                        mime == DocumentsContract.Document.MIME_TYPE_DIR -> pending.add(id)
+                        mime.startsWith("image/") -> result += DocumentsContract.buildDocumentUriUsingTree(treeUri, id)
+                    }
+                }
+            }
+        }
+        result
     }
 
     private fun importOne(uri: Uri) {

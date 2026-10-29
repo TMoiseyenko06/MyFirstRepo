@@ -78,6 +78,16 @@ class BeatShowViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    fun importFolder(treeUri: Uri?) {
+        if (treeUri == null || importProgress != null) return
+        importProgress = 0 to 0
+        viewModelScope.launch {
+            val uris = runCatching { photoRepository.listImagesInFolder(treeUri) }.getOrDefault(emptyList())
+            importProgress = null
+            if (uris.isEmpty()) message = "No photos found in that folder" else importPhotos(uris)
+        }
+    }
+
     fun deletePhotos(files: Collection<File>) = photoRepository.delete(files)
 
     fun clearPhotos() = photoRepository.clear()
